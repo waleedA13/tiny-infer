@@ -3,13 +3,20 @@
 #include <math.h>
 
 void rmsnorm(float *out, const float *x, const float *weight, int n) {
-    // TODO: ss = mean(x^2); scale = 1 / sqrt(ss + 1e-5); out[i] = weight[i] * x[i] * scale
-    for (int i = 0; i < n; i++) out[i] = x[i] * weight[i];
+    // ss = mean(x^2); scale = 1 / sqrt(ss + 1e-5). out may alias x.
+    float ss = 0.0f;
+    for (int i = 0; i < n; i++) ss += x[i] * x[i];
+    float scale = 1.0f / sqrtf(ss / n + 1e-5f);
+    for (int i = 0; i < n; i++) out[i] = weight[i] * x[i] * scale;
 }
 
 void softmax(float *x, int n) {
-    // TODO: subtract the max first for numerical stability, then exp and normalize.
-    (void)x; (void)n;
+    // Subtract the max first so exp never overflows, then normalize.
+    float max = x[0];
+    for (int i = 1; i < n; i++) if (x[i] > max) max = x[i];
+    float sum = 0.0f;
+    for (int i = 0; i < n; i++) { x[i] = expf(x[i] - max); sum += x[i]; }
+    for (int i = 0; i < n; i++) x[i] /= sum;
 }
 
 void matmul(float *out, const float *x, const float *w, int n, int d) {
