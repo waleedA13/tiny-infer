@@ -3,3 +3,4 @@ tiny-infer
 *.dSYM/
 models/
 .DS_Store
+tiny-infer-bench
