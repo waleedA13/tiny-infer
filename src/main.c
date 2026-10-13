@@ -1,4 +1,4 @@
-#define _POSIX_C_SOURCE 200809L  // clock_gettime under -std=c11
+#define _POSIX_C_SOURCE 200809L  // needed for clock_gettime with -std=c11
 
 #include "model.h"
 #include "ops.h"
@@ -26,8 +26,8 @@ static int selftest(void) {
     matmul(out, x, w, 3, 2);
     if (out[0] != 6 || out[1] != 15) { printf("FAIL matmul\n"); fails++; }
 
-    // Threaded matmul must match the single-threaded one bit for bit, on the
-    // stories15M shapes and on row counts that don't split evenly.
+    // The threaded matmul should give exactly the same numbers as one thread.
+    // Check the stories15M sizes, plus a couple that don't split evenly.
     int shapes[][2] = {{288, 288}, {288, 768}, {768, 288}, {288, 32000}, {7, 5}, {13, 3}};
     for (size_t k = 0; k < sizeof(shapes) / sizeof(shapes[0]); k++) {
         int n = shapes[k][0], d = shapes[k][1];
@@ -107,7 +107,7 @@ int main(int argc, char **argv) {
     int prompt_tokens[512];
     int n_prompt = tokenizer_encode(&t, prompt, prompt_tokens, 512);
 
-    if (rng == 0) rng = 1;  // xorshift gets stuck at 0
+    if (rng == 0) rng = 1;  // a seed of 0 would get stuck at 0 forever
     int token = prompt_tokens[0], next;
     double start = 0;
 

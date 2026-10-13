@@ -37,7 +37,7 @@ Get the model weights (TinyStories, about 60 MB):
 Then generate:
 
 ```bash
-./tiny-infer models/stories15M.bin -n 200 -t 0.8            # -j N threads (default: all cores), -s N seed
+./tiny-infer models/stories15M.bin -n 200 -t 0.8            # add -j 4 for 4 threads (default is all cores), -s 42 for a fixed seed
 ```
 
 ## Benchmarks

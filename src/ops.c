@@ -19,8 +19,8 @@ void softmax(float *x, int n) {
     (void)x; (void)n;
 }
 
-// Rows [start, end) of out = W @ x. Every thread runs this same loop on its own
-// rows, so each output is summed in the same order as the single-threaded build.
+// Computes rows start..end-1 of out = W @ x. Each thread runs this same loop on
+// its own rows, so every number comes out exactly the same as with one thread.
 static void matmul_rows(float *out, const float *x, const float *w, int n, int start, int end) {
     for (int i = start; i < end; i++) {
         float sum = 0.0f;
@@ -29,24 +29,24 @@ static void matmul_rows(float *out, const float *x, const float *w, int n, int s
     }
 }
 
-// Thread pool. Created once by ops_init; matmul hands each thread a contiguous
-// slice of output rows and the calling thread does slice 0 itself.
+// Thread pool. ops_init starts it once. Each matmul gives every thread a chunk
+// of output rows, and the main thread does the first chunk itself.
 //
-// A matmul in this model is tens of microseconds, so waking sleeping threads
-// through the kernel every call would eat the gain. Workers spin on a job
-// counter for a while and only fall back to the condition variable when idle
-// for longer (between tokens, or after generation ends).
+// One matmul here only takes tens of microseconds, so putting threads to sleep
+// and waking them up every time would cost more than we save. Instead the
+// workers keep checking a job counter for a while, and only go to sleep if
+// nothing shows up (like between tokens, or once generation is done).
 #define SPIN_ITERS 200000
 
 static struct {
-    int n_threads;           // including the caller
+    int n_threads;           // counts the main thread too
     pthread_t *workers;      // n_threads - 1 of them
     pthread_mutex_t mu;
     pthread_cond_t cv;
-    atomic_uint job;         // bumped once per matmul
-    atomic_int pending;      // workers still running the current job
+    atomic_uint job;         // goes up by one for each matmul
+    atomic_int pending;      // how many workers are still busy
     atomic_int stop;
-    // The current job. Written before job is bumped, read after.
+    // The current job. Set before job goes up, read by workers after.
     float *out;
     const float *x, *w;
     int n, d;
@@ -107,16 +107,16 @@ void ops_shutdown(void) {
     pool.workers = NULL;
     pool.n_threads = 1;
     atomic_store(&pool.stop, 0);
-    atomic_store(&pool.job, 0);  // new workers start at seen = 0
+    atomic_store(&pool.job, 0);  // new workers start counting from 0
 }
 
 void matmul(float *out, const float *x, const float *w, int n, int d) {
-    // Hottest loop in the program. Next step: vectorize matmul_rows.
+    // This is where most of the time goes. Next up: SIMD in matmul_rows.
     if (pool.n_threads == 1) { matmul_rows(out, x, w, n, 0, d); return; }
 
     pool.out = out; pool.x = x; pool.w = w; pool.n = n; pool.d = d;
     atomic_store_explicit(&pool.pending, pool.n_threads - 1, memory_order_relaxed);
-    // Bump under the lock so a worker that is about to sleep can't miss it.
+    // Do this while holding the lock so a worker about to sleep can't miss it.
     pthread_mutex_lock(&pool.mu);
     atomic_fetch_add_explicit(&pool.job, 1, memory_order_release);
     pthread_cond_broadcast(&pool.cv);
