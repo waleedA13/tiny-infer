@@ -42,7 +42,13 @@ Then generate:
 
 ## CI and releases
 
-Every push and pull request to main builds the code and runs the self-tests on Linux and macOS, once normally and once with the sanitizers on. To make a release, push a tag like `v0.1.0` and GitHub builds the binary for both and attaches them to a release.
+Everything is in `.github/workflows/ci-cd.yml`. It runs four jobs in a row, and the Actions page draws them as a diagram:
+
+```
+build-and-test -> sanitizers -> package -> release
+```
+
+Every push and pull request to main runs the first two on Linux and macOS: a normal build with the self-tests, then the self-tests again with the sanitizers on. To make a release, push a tag like `v0.1.0`. Then all four run and the binaries for both end up on a GitHub release.
 
 ## Benchmarks
 
