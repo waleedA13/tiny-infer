@@ -72,7 +72,7 @@ int compare_q8(const char *model_path, const Tokenizer *t, const char *prompt, i
     if (model_load(&fp32_model, model_path) != 0 || model_load(&int8_model, model_path) != 0) return 1;
     if (model_quantize(&int8_model) != 0) return 1;
     int vocab_size = fp32_model.config.vocab_size;
-    if (steps > fp32_model.config.seq_len) steps = fp32_model.config.seq_len;
+    if (steps > fp32_model.config.max_seq_len) steps = fp32_model.config.max_seq_len;
 
     int prompt_tokens[512];
     int prompt_length = tokenizer_encode(t, prompt, prompt_tokens, 512);
