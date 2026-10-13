@@ -65,53 +65,60 @@ int model_load(Model *m, const char *path) {
     m->config.vocab_size = abs(m->config.vocab_size);
 
     float *weights = (float *)((char *)m->mapped + sizeof(Config));
-    float *end = map_weights(&m->w, &m->config, weights, shared_cls);
-    if ((char *)end > (char *)m->mapped + m->file_size) {
+    float *weights_end = map_weights(&m->w, &m->config, weights, shared_cls);
+    if ((char *)weights_end > (char *)m->mapped + m->file_size) {
         fprintf(stderr, "%s: file is smaller than its config says\n", path);
         return -1;
     }
-    m->q.base = weights;
-    m->q.n = end - weights;
+    m->quantized.float_base = weights;
+    m->quantized.value_count = weights_end - weights;
     return alloc_state(&m->s, &m->config);
 }
 
 int model_quantize(Model *m) {
     Config *c = &m->config;
-    QWeights *q = &m->q;
+    QuantizedWeights *quantized = &m->quantized;
     int kv_dim = c->dim * c->n_kv_heads / c->n_heads;
-    if (c->dim % Q8_GROUP || c->hidden_dim % Q8_GROUP || kv_dim % Q8_GROUP || q->n % Q8_GROUP) {
+    if (c->dim % Q8_GROUP || c->hidden_dim % Q8_GROUP || kv_dim % Q8_GROUP ||
+        quantized->value_count % Q8_GROUP) {
         fprintf(stderr, "int8: dim, hidden_dim and kv_dim must be multiples of %d\n", Q8_GROUP);
         return -1;
     }
-    int max_n = c->dim > c->hidden_dim ? c->dim : c->hidden_dim;
-    q->q = malloc(q->n);
-    q->scale = malloc(q->n / Q8_GROUP * sizeof(float));
-    q->xq = malloc(max_n);
-    q->xs = malloc(max_n / Q8_GROUP * sizeof(float));
-    if (!q->q || !q->scale || !q->xq || !q->xs) {
-        free(q->q); free(q->scale); free(q->xq); free(q->xs);
-        q->q = NULL; q->scale = NULL; q->xq = NULL; q->xs = NULL;
+    int largest_input_dim = c->dim > c->hidden_dim ? c->dim : c->hidden_dim;
+    quantized->values = malloc(quantized->value_count);
+    quantized->scales = malloc(quantized->value_count / Q8_GROUP * sizeof(float));
+    quantized->input_values = malloc(largest_input_dim);
+    quantized->input_scales = malloc(largest_input_dim / Q8_GROUP * sizeof(float));
+    if (!quantized->values || !quantized->scales || !quantized->input_values || !quantized->input_scales) {
+        free(quantized->values); free(quantized->scales);
+        free(quantized->input_values); free(quantized->input_scales);
+        quantized->values = NULL; quantized->scales = NULL;
+        quantized->input_values = NULL; quantized->input_scales = NULL;
         return -1;
     }
-    quantize_q8(q->q, q->scale, q->base, q->n);
+    quantize_q8(quantized->values, quantized->scales, quantized->float_base, quantized->value_count);
     return 0;
 }
 
 // Every weight matmul in the forward pass goes through here. w is the float
 // matrix from the file. If the model is quantized, we use its int8 copy instead.
-static void linear(Model *m, float *out, const float *x, const float *w, int n, int d) {
-    QWeights *q = &m->q;
-    if (!q->q) { matmul(out, x, w, n, d); return; }
-    long off = w - q->base;
-    quantize_q8(q->xq, q->xs, x, n);
-    matmul_q8(out, q->xq, q->xs, q->q + off, q->scale + off / Q8_GROUP, n, d);
+static void linear(Model *m, float *out, const float *input, const float *float_weights,
+                   int in_dim, int out_dim) {
+    QuantizedWeights *quantized = &m->quantized;
+    if (!quantized->values) { matmul(out, input, float_weights, in_dim, out_dim); return; }
+    long weight_offset = float_weights - quantized->float_base;
+    quantize_q8(quantized->input_values, quantized->input_scales, input, in_dim);
+    matmul_q8(out, quantized->input_values, quantized->input_scales,
+              quantized->values + weight_offset, quantized->scales + weight_offset / Q8_GROUP,
+              in_dim, out_dim);
 }
 
 void model_free(Model *m) {
     RunState *s = &m->s;
     free(s->x); free(s->xb); free(s->xb2); free(s->hb); free(s->hb2);
     free(s->q); free(s->att); free(s->logits); free(s->key_cache); free(s->value_cache);
-    free(m->q.q); free(m->q.scale); free(m->q.xq); free(m->q.xs);
+    free(m->quantized.values); free(m->quantized.scales);
+    free(m->quantized.input_values); free(m->quantized.input_scales);
     if (m->mapped && m->mapped != MAP_FAILED) munmap(m->mapped, m->file_size);
     if (m->fd > 0) close(m->fd);
 }

@@ -47,19 +47,19 @@ typedef struct {
 // its int8 values start at X too, and its scales start at X / Q8_GROUP. This means
 // the forward pass doesn't have to care which version it's using.
 typedef struct {
-    const float *base;  // start of the float weights (w.token_embedding)
-    long n;             // number of floats from base to the end of the weights
-    int8_t *q;          // (n)
-    float *scale;       // (n / Q8_GROUP)
-    int8_t *xq;         // activation scratch, max(dim, hidden_dim)
-    float *xs;
-} QWeights;
+    const float *float_base;   // start of the float weights (w.token_embedding)
+    long value_count;          // number of floats from float_base to the end of the weights
+    int8_t *values;            // (value_count)
+    float *scales;             // (value_count / Q8_GROUP)
+    int8_t *input_values;      // scratch for the int8 input of each matmul, max(dim, hidden_dim)
+    float *input_scales;       // (max(dim, hidden_dim) / Q8_GROUP)
+} QuantizedWeights;
 
 typedef struct {
     Config config;
     Weights w;
     RunState s;
-    QWeights q;     // q.q == NULL means fp32
+    QuantizedWeights quantized;  // quantized.values == NULL means fp32
     int fd;
     void *mapped;
     size_t file_size;
@@ -68,7 +68,7 @@ typedef struct {
 int  model_load(Model *m, const char *path);
 void model_free(Model *m);
 
-// Turns every weight into int8 (see QWeights). After this, the matmuls in
+// Turns every weight into int8 (see QuantizedWeights). After this, the matmuls in
 // model_forward use matmul_q8. Returns -1 if the sizes aren't multiples of
 // Q8_GROUP or we run out of memory. The model just stays fp32 in that case.
 int  model_quantize(Model *m);
