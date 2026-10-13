@@ -1,5 +1,6 @@
 #include "model.h"
 #include "ops.h"
+#include "prof.h"
 
 #include <fcntl.h>
 #include <math.h>
@@ -84,9 +85,14 @@ float *model_forward(Model *m, int token, int pos) {
     memcpy(s->x, w->token_embedding + (long)token * c->dim, c->dim * sizeof(float));
 
     for (int l = 0; l < c->n_layers; l++) {
-        // TODO(attention): rmsnorm -> q,k,v matmuls -> RoPE -> write k,v into the cache
-        //   at pos -> scores against every cached key -> softmax -> weighted sum of values
-        //   -> wo matmul -> residual add into s->x.
+        // TODO(attention): rmsnorm -> q,k,v matmuls -> RoPE -> write k,v into the cache at pos.
+
+        // The attention core is timed on its own for --bench (matmuls are timed inside matmul()).
+        PROF_START(t_att);
+        // TODO(attention): scores against every cached key -> softmax -> weighted sum of values.
+        PROF_STOP(PROF_ATTENTION, t_att);
+
+        // TODO(attention): wo matmul -> residual add into s->x.
 
         // TODO(ffn): rmsnorm -> w1 and w3 matmuls -> SwiGLU (silu(w1 x) * (w3 x))
         //   -> w2 matmul -> residual add into s->x.
