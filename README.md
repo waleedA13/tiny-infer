@@ -40,6 +40,16 @@ Then generate:
 ./tiny-infer models/stories15M.bin -n 200 -t 0.8
 ```
 
+## CI and releases
+
+Everything is in `.github/workflows/ci-cd.yml`. It runs four jobs in a row, and the Actions page draws them as a diagram:
+
+```
+build-and-test -> sanitizers -> package -> release
+```
+
+Every push and pull request to main runs the first two on Linux and macOS: a normal build with the self-tests, then the self-tests again with the sanitizers on. To make a release, push a tag like `v0.1.0`. Then all four run and the binaries for both end up on a GitHub release.
+
 ## Benchmarks
 
 I'll fill this in as I optimize. Same model, same prompt, 200 tokens.
