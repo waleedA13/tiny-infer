@@ -40,6 +40,10 @@ Then generate:
 ./tiny-infer models/stories15M.bin -n 200 -t 0.8
 ```
 
+## CI and releases
+
+Every push and pull request to main builds the code and runs the self-tests on Linux and macOS, once normally and once with the sanitizers on. To make a release, push a tag like `v0.1.0` and GitHub builds the binary for both and attaches them to a release.
+
 ## Benchmarks
 
 I'll fill this in as I optimize. Same model, same prompt, 200 tokens.
