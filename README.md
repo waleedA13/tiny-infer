@@ -14,7 +14,7 @@ I'm building this to understand what happens under the hood when a model generat
 - [ ] attention with RoPE and a KV cache
 - [ ] SwiGLU feed-forward
 - [ ] BPE prompt encoding
-- [ ] pthreads matmul
+- [x] pthreads matmul
 - [ ] NEON / AVX2 matmul
 - [ ] int8 quantization
 - [ ] toy MoE layer with expert prefetching
@@ -37,7 +37,7 @@ Get the model weights (TinyStories, about 60 MB):
 Then generate:
 
 ```bash
-./tiny-infer models/stories15M.bin -n 200 -t 0.8
+./tiny-infer models/stories15M.bin -n 200 -t 0.8            # add -j 4 for 4 threads (default is all cores), -s 42 for a fixed seed
 ```
 
 ## Benchmarks
