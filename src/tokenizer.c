@@ -56,10 +56,10 @@ static int lookup(const TokenIndex *sorted, int n, const char *str) {
     return hit ? hit->id : -1;
 }
 
-// SentencePiece-style BPE, matching how the TinyStories tokenizer was trained:
-// BOS, a dummy leading space, one token per UTF-8 codepoint (falling back to
-// raw-byte tokens <0x00>..<0xFF> at ids 3..258), then repeatedly merge the
-// adjacent pair whose merged string has the highest score.
+// BPE, the same way the TinyStories tokenizer does it:
+// start with BOS and a space, then one token per character. If a character
+// isn't in the vocab, use its raw bytes instead (tokens <0x00>..<0xFF>, ids 3..258).
+// Then keep merging the neighbor pair with the best score until nothing merges.
 int tokenizer_encode(const Tokenizer *t, const char *text, int *tokens, int max_tokens) {
     if (max_tokens < 1) return 0;
 
@@ -82,8 +82,8 @@ int tokenizer_encode(const Tokenizer *t, const char *text, int *tokens, int max_
         if (space >= 0) buf[n++] = space;
     }
 
-    // One token per codepoint. A UTF-8 codepoint is a lead byte plus any
-    // continuation bytes (10xxxxxx), at most 4 bytes in total.
+    // One token per character. In UTF-8 a character is one lead byte plus up to
+    // 3 bytes that look like 10xxxxxx.
     char cp[5];
     for (size_t i = 0; i < len;) {
         size_t cp_len = 1;
@@ -97,7 +97,7 @@ int tokenizer_encode(const Tokenizer *t, const char *text, int *tokens, int max_
         i += cp_len;
     }
 
-    // Greedy merges, starting after BOS so it never merges with text.
+    // Merge pairs. Start after BOS so it never gets merged with text.
     for (;;) {
         float best_score = -1e10f;
         int best_id = -1, best_at = -1;

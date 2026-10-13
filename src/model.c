@@ -74,8 +74,8 @@ void model_free(Model *m) {
     if (m->fd > 0) close(m->fd);
 }
 
-// Rotary position embedding: rotate each (even, odd) pair of a head by an angle
-// that depends on the position and on how far into the head the pair sits.
+// RoPE: spin each pair of numbers in a head by an angle.
+// The angle depends on the token's position and where the pair sits in the head.
 static void rope(float *v, int n, int head_size, int pos) {
     for (int i = 0; i < n; i += 2) {
         int j = i % head_size;
@@ -102,7 +102,7 @@ float *model_forward(Model *m, int token, int pos) {
     memcpy(s->x, w->token_embedding + (long)token * dim, dim * sizeof(float));
 
     for (int l = 0; l < c->n_layers; l++) {
-        // Attention. k and v for this position go straight into the cache.
+        // Attention. This token's k and v get saved in the cache.
         long cache_off = (long)l * c->seq_len * kv_dim;
         float *k = s->key_cache + cache_off + (long)pos * kv_dim;
         float *v = s->value_cache + cache_off + (long)pos * kv_dim;
@@ -119,7 +119,7 @@ float *model_forward(Model *m, int token, int pos) {
             float *att = s->att + (long)h * c->seq_len;
             int kv_off = (h / kv_mul) * head_size;
 
-            // Score this query against every cached key up to and including pos.
+            // Compare this query with every key we've seen so far.
             for (int t = 0; t <= pos; t++) {
                 const float *kt = s->key_cache + cache_off + (long)t * kv_dim + kv_off;
                 float score = 0.0f;
@@ -128,7 +128,7 @@ float *model_forward(Model *m, int token, int pos) {
             }
             softmax(att, pos + 1);
 
-            // Weighted sum of the cached values.
+            // Mix the saved values using those scores.
             float *out = s->xb + h * head_size;
             memset(out, 0, head_size * sizeof(float));
             for (int t = 0; t <= pos; t++) {

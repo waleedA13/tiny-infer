@@ -14,7 +14,7 @@ void tokenizer_free(Tokenizer *t);
 // Returns the text for a token id (prev_token is used to strip the leading space after BOS).
 const char *tokenizer_decode(const Tokenizer *t, int prev_token, int token);
 
-// BPE-encodes text into token ids, starting with BOS. Returns the number of tokens written.
+// Turns text into token ids, starting with BOS. Returns how many tokens it wrote.
 int tokenizer_encode(const Tokenizer *t, const char *text, int *tokens, int max_tokens);
 
 #endif

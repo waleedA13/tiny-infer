@@ -1,7 +1,7 @@
 CC      ?= cc
 CFLAGS  ?= -O2 -Wall -Wextra -std=c11
 LDLIBS  := -lm -lpthread
-# -std=c11 hides POSIX functions like clock_gettime on glibc; ask for them explicitly.
+# On Linux, -std=c11 hides clock_gettime. This turns it back on.
 CPPFLAGS := -D_POSIX_C_SOURCE=200809L
 
 SRC := src/main.c src/model.c src/tokenizer.c src/sampler.c src/ops.c
