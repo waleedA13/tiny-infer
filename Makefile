@@ -2,7 +2,7 @@ CC      ?= cc
 CFLAGS  ?= -O2 -Wall -Wextra -std=c11
 LDLIBS  := -lm -lpthread
 
-SRC := src/main.c src/model.c src/tokenizer.c src/sampler.c src/ops.c
+SRC := src/main.c src/model.c src/tokenizer.c src/sampler.c src/ops.c src/compare.c
 BIN := tiny-infer
 
 $(BIN): $(SRC) src/*.h

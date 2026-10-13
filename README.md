@@ -38,7 +38,13 @@ Then generate:
 
 ```bash
 ./tiny-infer models/stories15M.bin -n 200 -t 0.8
+./tiny-infer models/stories15M.bin -n 200 -t 0.8 --int8     # int8 weights and matmul
+./tiny-infer models/stories15M.bin -n 200 --compare         # fp32 vs int8: error, speed, both stories
 ```
+
+`--int8` turns every weight into int8, in groups of 32 with one float scale per group
+(`scale = max|w| / 127`). The activations get the same treatment right before each matmul,
+so the inner loop just multiplies int8 by int8 and adds up in int32.
 
 ## Benchmarks
 
