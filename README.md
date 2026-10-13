@@ -10,10 +10,10 @@ I'm building this to understand what happens under the hood when a model generat
 - [x] tokenizer loading and decoding
 - [x] sampling (greedy and temperature)
 - [x] naive matmul
-- [ ] rmsnorm and softmax
-- [ ] attention with RoPE and a KV cache
-- [ ] SwiGLU feed-forward
-- [ ] BPE prompt encoding
+- [x] rmsnorm and softmax
+- [x] attention with RoPE and a KV cache
+- [x] SwiGLU feed-forward
+- [x] BPE prompt encoding
 - [x] pthreads matmul
 - [ ] NEON / AVX2 matmul
 - [ ] int8 quantization
@@ -39,6 +39,16 @@ Then generate:
 ```bash
 ./tiny-infer models/stories15M.bin -n 200 -t 0.8            # add -j 4 for 4 threads (default is all cores), -s 42 for a fixed seed
 ```
+
+## CI and releases
+
+Everything is in `.github/workflows/ci-cd.yml`. It runs four jobs in a row, and the Actions page draws them as a diagram:
+
+```
+build-and-test -> sanitizers -> package -> release
+```
+
+Every push and pull request to main runs the first two on Linux and macOS: a normal build with the self-tests, then the self-tests again with the sanitizers on. To make a release, push a tag like `v0.1.0`. Then all four run and the binaries for both end up on a GitHub release.
 
 ## Benchmarks
 

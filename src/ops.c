@@ -9,14 +9,21 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-void rmsnorm(float *out, const float *x, const float *weight, int n) {
-    // TODO: ss = mean(x^2); scale = 1 / sqrt(ss + 1e-5); out[i] = weight[i] * x[i] * scale
-    for (int i = 0; i < n; i++) out[i] = x[i] * weight[i];
+void rmsnorm(float *output, const float *input, const float *weight, int size) {
+    // mean_square = mean(input^2); scale = 1 / sqrt(mean_square + 1e-5).
+    float sum_of_squares = 0.0f;
+    for (int i = 0; i < size; i++) sum_of_squares += input[i] * input[i];
+    float scale = 1.0f / sqrtf(sum_of_squares / size + 1e-5f);
+    for (int i = 0; i < size; i++) output[i] = weight[i] * input[i] * scale;
 }
 
-void softmax(float *x, int n) {
-    // TODO: subtract the max first for numerical stability, then exp and normalize.
-    (void)x; (void)n;
+void softmax(float *values, int size) {
+    // Subtract the max first so exp doesn't blow up, then make it sum to 1.
+    float max_value = values[0];
+    for (int i = 1; i < size; i++) if (values[i] > max_value) max_value = values[i];
+    float total = 0.0f;
+    for (int i = 0; i < size; i++) { values[i] = expf(values[i] - max_value); total += values[i]; }
+    for (int i = 0; i < size; i++) values[i] /= total;
 }
 
 // Computes rows first_row..end_row-1 of output = weights @ input. Each thread
@@ -123,15 +130,15 @@ void ops_shutdown(void) {
     atomic_store(&thread_pool.job_counter, 0);  // new workers start counting from 0
 }
 
-void matmul(float *out, const float *x, const float *w, int n, int d) {
+void matmul(float *output, const float *input, const float *weights, int in_size, int out_size) {
     // This is where most of the time goes. Next up: SIMD in matmul_rows.
-    if (thread_pool.thread_count == 1) { matmul_rows(out, x, w, n, 0, d); return; }
+    if (thread_pool.thread_count == 1) { matmul_rows(output, input, weights, in_size, 0, out_size); return; }
 
-    thread_pool.job_output = out;
-    thread_pool.job_input = x;
-    thread_pool.job_weights = w;
-    thread_pool.job_input_size = n;
-    thread_pool.job_output_size = d;
+    thread_pool.job_output = output;
+    thread_pool.job_input = input;
+    thread_pool.job_weights = weights;
+    thread_pool.job_input_size = in_size;
+    thread_pool.job_output_size = out_size;
     atomic_store_explicit(&thread_pool.busy_workers, thread_pool.thread_count - 1, memory_order_relaxed);
     // Do this while holding the lock so a worker about to sleep can't miss it.
     pthread_mutex_lock(&thread_pool.sleep_lock);
