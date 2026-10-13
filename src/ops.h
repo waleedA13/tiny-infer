@@ -4,13 +4,13 @@
 // The math kernels. These are where all the speed work happens:
 // naive -> pthreads -> SIMD (NEON/AVX2) -> int8.
 
-// out = rmsnorm(x) * weight, length n
-void rmsnorm(float *out, const float *x, const float *weight, int n);
+// output = rmsnorm(input) * weight, all of length size. output can be the same buffer as input.
+void rmsnorm(float *output, const float *input, const float *weight, int size);
 
-// In-place softmax over n values
-void softmax(float *x, int n);
+// In-place softmax over size values
+void softmax(float *values, int size);
 
-// out(d) = W(d, n) @ x(n). W is row-major.
-void matmul(float *out, const float *x, const float *w, int n, int d);
+// output(out_size) = weights(out_size, in_size) @ input(in_size). weights is row-major.
+void matmul(float *output, const float *input, const float *weights, int in_size, int out_size);
 
 #endif
