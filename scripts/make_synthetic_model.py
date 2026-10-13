@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Writes a checkpoint with the same header and tensor shapes as stories15M.bin,
-filled with small deterministic random weights. Useful for benchmarking when the
-real weights aren't available: the amount of work per token is identical."""
+"""Makes a fake checkpoint the same size and shape as stories15M.bin, filled with
+small random numbers. Handy for benchmarking when you don't have the real weights,
+since the model does the same amount of work either way."""
 import array
 import random
 import struct

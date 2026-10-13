@@ -20,8 +20,8 @@ debug: $(BIN)
 test: $(BIN)
 	./$(BIN) --selftest
 
-# Benchmark: always rebuilds a separate binary with BENCH_FLAGS so the numbers never
-# come from a stale debug or -O2 build. Override MODEL, BENCH_TOKENS or BENCH_RUNS as needed.
+# Benchmark. Always rebuilds its own binary so I never time an old debug build by mistake.
+# You can override MODEL, BENCH_TOKENS or BENCH_RUNS.
 MODEL        ?= models/stories15M.bin
 BENCH_TOKENS ?= 200
 BENCH_RUNS   ?= 5
@@ -31,8 +31,8 @@ bench: $(MODEL)
 	$(CC) $(CPPFLAGS) $(BENCH_FLAGS) -DBUILD_FLAGS='"$(BENCH_FLAGS)"' -o $(BIN)-bench $(SRC) $(LDLIBS)
 	./$(BIN)-bench --bench $(MODEL) -n $(BENCH_TOKENS) -r $(BENCH_RUNS)
 
-# Random weights with the exact shape of stories15M. Speed does not depend on the
-# weight values, so this benchmarks the same work without downloading anything.
+# Fake weights the same size as stories15M. Speed doesn't depend on the actual
+# numbers, so this does the same work without downloading anything.
 models/synthetic15M.bin: scripts/make_synthetic_model.py
 	python3 scripts/make_synthetic_model.py $@
 

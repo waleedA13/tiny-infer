@@ -42,9 +42,9 @@ static int cmp_double(const void *a, const void *b) {
     return (x > y) - (x < y);
 }
 
-// Reproducible benchmark: fixed start token (BOS), greedy sampling, a fixed number
-// of steps, one untimed warm-up run, then the median of `runs` timed runs.
-// No tokenizer and no printing inside the timed loop.
+// Benchmark mode. Same thing every time: start from BOS, always pick the top token,
+// run a fixed number of steps. One warm-up run first, then report the middle of the
+// timed runs. No tokenizer and no printing while the clock is running.
 static int bench(const char *model_path, int steps, int runs) {
     Model m;
     if (model_load(&m, model_path) != 0) return 1;
