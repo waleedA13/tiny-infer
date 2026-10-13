@@ -25,8 +25,8 @@ static float *map_weights(Weights *w, const Config *c, float *p, int shared_cls)
     w->w2 = p;              p += L * c->hidden_dim * c->dim;
     w->w3 = p;              p += L * c->dim * c->hidden_dim;
     w->rms_final = p;       p += c->dim;
-    p += c->seq_len * head_size;  // legacy freq_cis_real, unused
-    p += c->seq_len * head_size;  // legacy freq_cis_imag, unused
+    p += c->seq_len * head_size / 2;  // legacy freq_cis_real, unused
+    p += c->seq_len * head_size / 2;  // legacy freq_cis_imag, unused
     w->wcls = shared_cls ? w->token_embedding : p;
     if (!shared_cls) p += (long)c->vocab_size * c->dim;
     return p;
