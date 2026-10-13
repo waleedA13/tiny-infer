@@ -8,13 +8,13 @@ typedef struct {
     int max_token_length;
 } Tokenizer;
 
-int  tokenizer_load(Tokenizer *t, const char *path, int vocab_size);
-void tokenizer_free(Tokenizer *t);
+int  tokenizer_load(Tokenizer *tokenizer, const char *path, int vocab_size);
+void tokenizer_free(Tokenizer *tokenizer);
 
 // Returns the text for a token id (prev_token is used to strip the leading space after BOS).
-const char *tokenizer_decode(const Tokenizer *t, int prev_token, int token);
+const char *tokenizer_decode(const Tokenizer *tokenizer, int prev_token, int token);
 
-// TODO: BPE encode the prompt into token ids. Returns the number of tokens written.
-int tokenizer_encode(const Tokenizer *t, const char *text, int *tokens, int max_tokens);
+// Turns text into token ids, starting with BOS. Returns how many tokens it wrote.
+int tokenizer_encode(const Tokenizer *tokenizer, const char *text, int *tokens, int max_tokens);
 
 #endif

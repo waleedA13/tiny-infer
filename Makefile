@@ -1,9 +1,10 @@
 CC      ?= cc
 CFLAGS  ?= -O2 -Wall -Wextra -std=c11
-CPPFLAGS := -D_POSIX_C_SOURCE=200809L   # clock_gettime under -std=c11 on Linux
 LDLIBS  := -lm -lpthread
+# On Linux, -std=c11 hides clock_gettime. This turns it back on.
+CPPFLAGS := -D_POSIX_C_SOURCE=200809L
 
-SRC := src/main.c src/model.c src/tokenizer.c src/sampler.c src/ops.c src/prof.c
+SRC := src/main.c src/model.c src/tokenizer.c src/sampler.c src/ops.c src/compare.c src/prof.c
 BIN := tiny-infer
 
 $(BIN): $(SRC) src/*.h

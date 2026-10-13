@@ -10,11 +10,11 @@ I'm building this to understand what happens under the hood when a model generat
 - [x] tokenizer loading and decoding
 - [x] sampling (greedy and temperature)
 - [x] naive matmul
-- [ ] rmsnorm and softmax
-- [ ] attention with RoPE and a KV cache
-- [ ] SwiGLU feed-forward
-- [ ] BPE prompt encoding
-- [ ] pthreads matmul
+- [x] rmsnorm and softmax
+- [x] attention with RoPE and a KV cache
+- [x] SwiGLU feed-forward
+- [x] BPE prompt encoding
+- [x] pthreads matmul
 - [ ] NEON / AVX2 matmul
 - [ ] int8 quantization
 - [ ] toy MoE layer with expert prefetching
@@ -37,8 +37,24 @@ Get the model weights (TinyStories, about 60 MB):
 Then generate:
 
 ```bash
-./tiny-infer models/stories15M.bin -n 200 -t 0.8
+./tiny-infer models/stories15M.bin -n 200 -t 0.8            # add -j 4 for 4 threads (default is all cores), -s 42 for a fixed seed
+./tiny-infer models/stories15M.bin -n 200 -t 0.8 --int8     # int8 weights and matmul
+./tiny-infer models/stories15M.bin -n 200 --compare         # fp32 vs int8: error, speed, both stories
 ```
+
+`--int8` turns every weight into int8, in groups of 32 with one float scale per group
+(`scale = max|w| / 127`). The activations get the same treatment right before each matmul,
+so the inner loop just multiplies int8 by int8 and adds up in int32.
+
+## CI and releases
+
+Everything is in `.github/workflows/ci-cd.yml`. It runs four jobs in a row, and the Actions page draws them as a diagram:
+
+```
+build-and-test -> sanitizers -> package -> release
+```
+
+Every push and pull request to main runs the first two on Linux and macOS: a normal build with the self-tests, then the self-tests again with the sanitizers on. To make a release, push a tag like `v0.1.0`. Then all four run and the binaries for both end up on a GitHub release.
 
 ## Benchmarks
 
