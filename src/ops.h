@@ -16,17 +16,17 @@ void softmax(float *x, int n);
 void matmul(float *out, const float *x, const float *w, int n, int d);
 
 // ---- int8 quantization ----
-// Values are quantized in groups of Q8_GROUP consecutive floats. Each group stores
-// int8 values plus one float scale, so x ~= q * scale. A group never crosses a
-// matrix row as long as the row length is a multiple of Q8_GROUP.
+// Floats get turned into int8 in groups of Q8_GROUP. Each group keeps its int8
+// values plus one float scale, so x is roughly q * scale. As long as a row's length
+// is a multiple of Q8_GROUP, a group never spills into the next row.
 #define Q8_GROUP 32
 
-// Symmetric per-group quantization: scale = max|x| / 127. n must be a multiple of Q8_GROUP.
+// scale = biggest |x| in the group / 127. n has to be a multiple of Q8_GROUP.
 void quantize_q8(int8_t *q, float *scale, const float *x, long n);
 void dequantize_q8(float *x, const int8_t *q, const float *scale, long n);
 
-// Same shape as matmul, but both W and x are int8 with per-group scales.
-// Each group's dot product accumulates in int32, then gets scaled back to float.
+// Same as matmul, but W and x are both int8 with a scale per group.
+// Each group's dot product adds up in int32, then gets scaled back to a float.
 void matmul_q8(float *out, const int8_t *xq, const float *xs,
                const int8_t *wq, const float *ws, int n, int d);
 

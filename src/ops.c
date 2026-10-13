@@ -43,8 +43,8 @@ void dequantize_q8(float *x, const int8_t *q, const float *scale, long n) {
 
 void matmul_q8(float *out, const int8_t *xq, const float *xs,
                const int8_t *wq, const float *ws, int n, int d) {
-    // Naive like matmul. The int32 inner loop is what a compiler (or later, hand
-    // written NEON/AVX2) can turn into wide integer multiply-adds.
+    // Naive, same as matmul. The int32 inner loop is the part the compiler (or my
+    // own NEON/AVX2 code later) can turn into wide integer multiply-adds.
     int groups = n / Q8_GROUP;
     for (int i = 0; i < d; i++) {
         const int8_t *row = wq + (long)i * n;

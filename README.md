@@ -42,9 +42,9 @@ Then generate:
 ./tiny-infer models/stories15M.bin -n 200 --compare         # fp32 vs int8: error, speed, both stories
 ```
 
-`--int8` quantizes every weight in groups of 32 (one float scale per group, `scale = max|w| / 127`).
-Activations are quantized the same way right before each matmul, so the inner loop is an
-int8 x int8 dot product accumulated in int32.
+`--int8` turns every weight into int8, in groups of 32 with one float scale per group
+(`scale = max|w| / 127`). The activations get the same treatment right before each matmul,
+so the inner loop just multiplies int8 by int8 and adds up in int32.
 
 ## Benchmarks
 

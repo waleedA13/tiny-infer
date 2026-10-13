@@ -42,11 +42,10 @@ typedef struct {
     float *value_cache;      // (n_layers, seq_len, kv_dim)
 } RunState;
 
-// int8 copy of the whole weight blob, made by model_quantize(). It keeps the same
-// element order as the mmap'd floats, so the float pointer for any matrix (say
-// w.wq + l * dim * dim) maps to the int8 data at the same offset, and to its
-// scales at offset / Q8_GROUP. That way the forward pass never needs to know
-// which format it is running.
+// An int8 copy of all the weights, made by model_quantize(). The values sit in the
+// same order as the floats in the file. So if a matrix starts at float offset X,
+// its int8 values start at X too, and its scales start at X / Q8_GROUP. This means
+// the forward pass doesn't have to care which version it's using.
 typedef struct {
     const float *base;  // start of the float weights (w.token_embedding)
     long n;             // number of floats from base to the end of the weights
@@ -69,9 +68,9 @@ typedef struct {
 int  model_load(Model *m, const char *path);
 void model_free(Model *m);
 
-// Quantizes every weight to group-wise int8 (see QWeights). After this, all
-// matmuls in model_forward run through matmul_q8. Returns -1 if the shapes are
-// not multiples of Q8_GROUP or memory runs out; the model stays fp32 then.
+// Turns every weight into int8 (see QWeights). After this, the matmuls in
+// model_forward use matmul_q8. Returns -1 if the sizes aren't multiples of
+// Q8_GROUP or we run out of memory. The model just stays fp32 in that case.
 int  model_quantize(Model *m);
 
 // Runs one token through the network at position pos and returns logits (vocab_size).

@@ -98,7 +98,7 @@ int model_quantize(Model *m) {
 }
 
 // Every weight matmul in the forward pass goes through here. w is the float
-// matrix in the checkpoint; when the model is quantized we use its int8 twin.
+// matrix from the file. If the model is quantized, we use its int8 copy instead.
 static void linear(Model *m, float *out, const float *x, const float *w, int n, int d) {
     QWeights *q = &m->q;
     if (!q->q) { matmul(out, x, w, n, d); return; }

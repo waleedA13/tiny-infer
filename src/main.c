@@ -25,7 +25,8 @@ static int selftest(void) {
     matmul(out, x, w, 3, 2);
     if (out[0] != 6 || out[1] != 15) { printf("FAIL matmul\n"); fails++; }
 
-    // int8: round trip error is at most half a step, and matmul_q8 tracks matmul.
+    // int8: going to int8 and back should be off by half a step at most, and
+    // matmul_q8 should land close to matmul.
     enum { N = 2 * Q8_GROUP, D = 3 };
     float wf[D * N], xf[N], wd[D * N], ref[D], got[D];
     int8_t wq[D * N], xq[N];

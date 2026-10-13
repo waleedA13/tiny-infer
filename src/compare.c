@@ -20,8 +20,8 @@ static int argmax(const float *x, int n) {
     return best;
 }
 
-// KL(p || q) where p = softmax(a), q = softmax(b). Done in double so the
-// comparison itself adds no noise.
+// KL(p || q) with p = softmax(a) and q = softmax(b). Uses doubles so the
+// check itself doesn't add error.
 static double kl_logits(const float *a, const float *b, int n) {
     double ma = a[argmax(a, n)], mb = b[argmax(b, n)], za = 0, zb = 0;
     for (int i = 0; i < n; i++) { za += exp(a[i] - ma); zb += exp(b[i] - mb); }
@@ -33,8 +33,8 @@ static double kl_logits(const float *a, const float *b, int n) {
     return kl;
 }
 
-// Greedy generation from the prompt. Fills out[] with the tokens after BOS and
-// returns how many there are. *tok_s gets the forward pass speed.
+// Greedy generation from the prompt. Puts the tokens after BOS in out[] and
+// returns how many there are. *tok_s gets the speed.
 static int generate(Model *m, const int *prompt, int n_prompt, int steps, int *out, double *tok_s) {
     double secs = 0;
     int timed = 0;
@@ -68,8 +68,8 @@ int compare_q8(const char *model_path, const Tokenizer *t, const char *prompt, i
     int prompt_tokens[512];
     int n_prompt = tokenizer_encode(t, prompt, prompt_tokens, 512);
 
-    // 1. Teacher-forced: both models see the exact same tokens (the fp32 greedy
-    //    story), so the numbers measure per-step error without drift.
+    // 1. Feed both models the exact same tokens (the fp32 greedy story). This way
+    //    we see the error at each step without one bad pick throwing off the rest.
     double kl_sum = 0, kl_max = 0, dlogit_max = 0;
     int agree = 0, n = 0, token = prompt_tokens[0];
     for (int pos = 0; pos < steps; pos++) {
@@ -90,7 +90,7 @@ int compare_q8(const char *model_path, const Tokenizer *t, const char *prompt, i
         token = next;
     }
 
-    // 2. Free-running: each model writes its own greedy story.
+    // 2. Now let each model write its own greedy story.
     int *toks_f = malloc(steps * sizeof(int)), *toks_q = malloc(steps * sizeof(int));
     double speed_f, speed_q;
     int nf = generate(&f, prompt_tokens, n_prompt, steps, toks_f, &speed_f);
