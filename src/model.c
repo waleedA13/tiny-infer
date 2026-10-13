@@ -88,9 +88,9 @@ float *model_forward(Model *m, int token, int pos) {
         // TODO(attention): rmsnorm -> q,k,v matmuls -> RoPE -> write k,v into the cache at pos.
 
         // The attention core is timed on its own for --bench (matmuls are timed inside matmul()).
-        PROF_START(t_att);
+        PROF_START(attention_start_ms);
         // TODO(attention): scores against every cached key -> softmax -> weighted sum of values.
-        PROF_STOP(PROF_ATTENTION, t_att);
+        PROF_STOP(PROF_ATTENTION, attention_start_ms);
 
         // TODO(attention): wo matmul -> residual add into s->x.
 

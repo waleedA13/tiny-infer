@@ -11,7 +11,7 @@ dim, hidden_dim, n_layers, n_heads, n_kv_heads, vocab_size, seq_len = 288, 768, 
 head_size = dim // n_heads
 kv_dim = n_kv_heads * head_size
 
-counts = [
+tensor_sizes = [
     vocab_size * dim,                 # token_embedding (shared with the classifier)
     n_layers * dim,                   # rms_att
     n_layers * dim * dim,             # wq
@@ -26,11 +26,12 @@ counts = [
     2 * seq_len * head_size,          # legacy freq_cis_real / freq_cis_imag
 ]
 
-path = sys.argv[1] if len(sys.argv) > 1 else "models/synthetic15M.bin"
-rng = random.Random(0)
-with open(path, "wb") as f:
+output_path = sys.argv[1] if len(sys.argv) > 1 else "models/synthetic15M.bin"
+random_generator = random.Random(0)
+with open(output_path, "wb") as output_file:
     # Positive vocab_size means the classifier shares the embedding, like stories15M.
-    f.write(struct.pack("7i", dim, hidden_dim, n_layers, n_heads, n_kv_heads, vocab_size, seq_len))
-    for n in counts:
-        f.write(array.array("f", (rng.uniform(-0.05, 0.05) for _ in range(n))).tobytes())
-print(f"wrote {path} ({sum(counts) / 1e6:.1f}M params)")
+    output_file.write(struct.pack("7i", dim, hidden_dim, n_layers, n_heads, n_kv_heads, vocab_size, seq_len))
+    for tensor_size in tensor_sizes:
+        weights = array.array("f", (random_generator.uniform(-0.05, 0.05) for _ in range(tensor_size)))
+        output_file.write(weights.tobytes())
+print(f"wrote {output_path} ({sum(tensor_sizes) / 1e6:.1f}M params)")

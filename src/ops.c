@@ -16,11 +16,11 @@ void softmax(float *x, int n) {
 void matmul(float *out, const float *x, const float *w, int n, int d) {
     // Naive version. This is the hottest loop in the program: profile it, then
     // split rows across threads, then vectorize the inner loop.
-    PROF_START(t);
+    PROF_START(matmul_start_ms);
     for (int i = 0; i < d; i++) {
         float sum = 0.0f;
         for (int j = 0; j < n; j++) sum += w[(long)i * n + j] * x[j];
         out[i] = sum;
     }
-    PROF_STOP(PROF_MATMUL, t);
+    PROF_STOP(PROF_MATMUL, matmul_start_ms);
 }
