@@ -2,6 +2,7 @@
 #define MODEL_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 // Header of the checkpoint file (same layout as llama2.c's TinyStories .bin files).
 typedef struct {
@@ -41,10 +42,25 @@ typedef struct {
     float *value_cache;      // (n_layers, seq_len, kv_dim)
 } RunState;
 
+// int8 copy of the whole weight blob, made by model_quantize(). It keeps the same
+// element order as the mmap'd floats, so the float pointer for any matrix (say
+// w.wq + l * dim * dim) maps to the int8 data at the same offset, and to its
+// scales at offset / Q8_GROUP. That way the forward pass never needs to know
+// which format it is running.
+typedef struct {
+    const float *base;  // start of the float weights (w.token_embedding)
+    long n;             // number of floats from base to the end of the weights
+    int8_t *q;          // (n)
+    float *scale;       // (n / Q8_GROUP)
+    int8_t *xq;         // activation scratch, max(dim, hidden_dim)
+    float *xs;
+} QWeights;
+
 typedef struct {
     Config config;
     Weights w;
     RunState s;
+    QWeights q;     // q.q == NULL means fp32
     int fd;
     void *mapped;
     size_t file_size;
@@ -52,6 +68,11 @@ typedef struct {
 
 int  model_load(Model *m, const char *path);
 void model_free(Model *m);
+
+// Quantizes every weight to group-wise int8 (see QWeights). After this, all
+// matmuls in model_forward run through matmul_q8. Returns -1 if the shapes are
+// not multiples of Q8_GROUP or memory runs out; the model stays fp32 then.
+int  model_quantize(Model *m);
 
 // Runs one token through the network at position pos and returns logits (vocab_size).
 float *model_forward(Model *m, int token, int pos);
