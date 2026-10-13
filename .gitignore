@@ -1,0 +1,5 @@
+tiny-infer
+*.o
+*.dSYM/
+models/
+.DS_Store
