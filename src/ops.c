@@ -1,4 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
+// macOS hides _SC_NPROCESSORS_ONLN (used to count the CPU cores) when only
+// _POSIX_C_SOURCE is set. This turns it back on. Linux ignores it.
+#define _DARWIN_C_SOURCE
 
 #include "ops.h"
 
