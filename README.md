@@ -10,10 +10,10 @@ I'm building this to understand what happens under the hood when a model generat
 - [x] tokenizer loading and decoding
 - [x] sampling (greedy and temperature)
 - [x] naive matmul
-- [ ] rmsnorm and softmax
-- [ ] attention with RoPE and a KV cache
-- [ ] SwiGLU feed-forward
-- [ ] BPE prompt encoding
+- [x] rmsnorm and softmax
+- [x] attention with RoPE and a KV cache
+- [x] SwiGLU feed-forward
+- [x] BPE prompt encoding
 - [ ] pthreads matmul
 - [ ] NEON / AVX2 matmul
 - [ ] int8 quantization
