@@ -3,6 +3,7 @@
 #include "compare.h"
 #include "model.h"
 #include "ops.h"
+#include "prof.h"
 #include "sampler.h"
 #include "tokenizer.h"
 
@@ -12,11 +13,9 @@
 #include <string.h>
 #include <time.h>
 
-static double now_ms(void) {
-    struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
-    return now.tv_sec * 1000.0 + now.tv_nsec / 1e6;
-}
+#ifndef BUILD_FLAGS
+#define BUILD_FLAGS "unknown"
+#endif
 
 // Small checks for the math kernels. Add one every time you optimize a kernel,
 // and compare the fast version against the naive one.
@@ -103,10 +102,84 @@ static int selftest(void) {
     return failures ? 1 : 0;
 }
 
+static int compare_doubles(const void *left_ptr, const void *right_ptr) {
+    double left = *(const double *)left_ptr, right = *(const double *)right_ptr;
+    return (left > right) - (left < right);
+}
+
+// Benchmark mode. Same thing every time: start from BOS, always pick the top token,
+// run a fixed number of steps. One warm-up run first, then report the middle of the
+// timed runs. No tokenizer and no printing while the clock is running.
+static int run_benchmark(const char *model_path, int num_steps, int num_runs, int thread_count) {
+    Model model;
+    if (model_load(&model, model_path) != 0) return 1;
+    Config *config = &model.config;
+    if (num_steps > config->max_seq_len) num_steps = config->max_seq_len;
+    if (num_runs < 1) num_runs = 1;
+    thread_count = ops_init(thread_count);
+    if (thread_count < 0) return 1;
+
+    printf("model    %s\n", model_path);
+    printf("config   embed_dim=%d hidden=%d layers=%d heads=%d kv_heads=%d vocab=%d max_seq_len=%d\n",
+           config->embed_dim, config->hidden_dim, config->num_layers, config->num_heads,
+           config->num_kv_heads, config->vocab_size, config->max_seq_len);
+    printf("build    %s | %s\n", __VERSION__, BUILD_FLAGS);
+    printf("threads  %d\n", thread_count);
+    printf("workload %d tokens from BOS, greedy, 1 warm-up + %d timed runs\n\n", num_steps, num_runs);
+
+    double *tokens_per_second = malloc(num_runs * sizeof(double));
+    double total_ms_all_runs = 0, sampling_ms_all_runs = 0, op_ms_all_runs[PROF_N] = {0};
+    for (int run_index = -1; run_index < num_runs; run_index++) {   // -1 is the warm-up
+        unsigned long long rng_state = 42;
+        double sampling_ms = 0;
+        int current_token = 1;
+        prof_reset();
+        prof_enabled = 1;
+        double run_start_ms = prof_now_ms();
+        for (int position = 0; position < num_steps; position++) {
+            float *logits = model_forward(&model, current_token, position);
+            double sample_start_ms = prof_now_ms();
+            current_token = sample(logits, config->vocab_size, 0.0f, &rng_state);
+            sampling_ms += prof_now_ms() - sample_start_ms;
+        }
+        double run_ms = prof_now_ms() - run_start_ms;
+        prof_enabled = 0;
+        if (run_index < 0) continue;
+        tokens_per_second[run_index] = num_steps / (run_ms / 1000.0);
+        total_ms_all_runs += run_ms;
+        sampling_ms_all_runs += sampling_ms;
+        for (int op = 0; op < PROF_N; op++) op_ms_all_runs[op] += prof_ms[op];
+    }
+
+    double total_tokens = (double)num_runs * num_steps;
+    double total_ms_per_token = total_ms_all_runs / total_tokens;
+    double matmul_ms_per_token = op_ms_all_runs[PROF_MATMUL] / total_tokens;
+    double attention_ms_per_token = op_ms_all_runs[PROF_ATTENTION] / total_tokens;
+    double sampling_ms_per_token = sampling_ms_all_runs / total_tokens;
+    double rest_ms_per_token = total_ms_per_token - matmul_ms_per_token
+                             - attention_ms_per_token - sampling_ms_per_token;
+    qsort(tokens_per_second, num_runs, sizeof(double), compare_doubles);
+
+    printf("tok/s    %.1f median (min %.1f, max %.1f)\n\n",
+           tokens_per_second[num_runs / 2], tokens_per_second[0], tokens_per_second[num_runs - 1]);
+    printf("%-10s %10s %7s\n", "op", "ms/token", "share");
+    printf("%-10s %10.4f %6.1f%%\n", "matmul", matmul_ms_per_token, 100 * matmul_ms_per_token / total_ms_per_token);
+    printf("%-10s %10.4f %6.1f%%\n", "attention", attention_ms_per_token, 100 * attention_ms_per_token / total_ms_per_token);
+    printf("%-10s %10.4f %6.1f%%\n", "sampling", sampling_ms_per_token, 100 * sampling_ms_per_token / total_ms_per_token);
+    printf("%-10s %10.4f %6.1f%%\n", "rest", rest_ms_per_token, 100 * rest_ms_per_token / total_ms_per_token);
+    printf("%-10s %10.4f %6.1f%%\n", "total", total_ms_per_token, 100.0);
+
+    free(tokens_per_second);
+    ops_shutdown();
+    model_free(&model);
+    return 0;
+}
+
 static void usage(void) {
     fprintf(stderr,
         "usage: tiny-infer <model.bin> [-z tokenizer.bin] [-n steps] [-t temperature] [-i prompt]\n"
         "                  [-s seed] [-j threads] [--int8] [--compare]\n"
+        "       tiny-infer --bench <model.bin> [-n steps] [-r runs] [-j threads]\n"
         "       tiny-infer --selftest\n"
         "  --int8     quantize the weights to int8 and run with matmul_q8\n"
         "  --compare  run fp32 and int8 side by side (greedy) and report error and speed\n");
@@ -114,6 +187,16 @@ static void usage(void) {
 
 int main(int argc, char **argv) {
     if (argc >= 2 && strcmp(argv[1], "--selftest") == 0) return selftest();
+    if (argc >= 3 && strcmp(argv[1], "--bench") == 0) {
+        int bench_steps = 200, bench_runs = 5, bench_threads = 0;
+        for (int arg_index = 3; arg_index + 1 < argc; arg_index += 2) {
+            if (!strcmp(argv[arg_index], "-n")) bench_steps = atoi(argv[arg_index + 1]);
+            else if (!strcmp(argv[arg_index], "-r")) bench_runs = atoi(argv[arg_index + 1]);
+            else if (!strcmp(argv[arg_index], "-j")) bench_threads = atoi(argv[arg_index + 1]);
+            else { usage(); return 1; }
+        }
+        return run_benchmark(argv[2], bench_steps, bench_runs, bench_threads);
+    }
     if (argc < 2) { usage(); return 1; }
 
     const char *model_path = argv[1];
@@ -176,10 +259,10 @@ int main(int argc, char **argv) {
         printf("%s", tokenizer_decode(&tokenizer, token, next_token));
         fflush(stdout);
         token = next_token;
-        if (position == 0) start_time = now_ms();                                 // skip warm-up step
+        if (position == 0) start_time = prof_now_ms();                                 // skip warm-up step
     }
 
-    if (steps > 1) printf("\n\n%.1f tok/s\n", (steps - 1) / ((now_ms() - start_time) / 1000.0));
+    if (steps > 1) printf("\n\n%.1f tok/s\n", (steps - 1) / ((prof_now_ms() - start_time) / 1000.0));
 
     ops_shutdown();
     tokenizer_free(&tokenizer);

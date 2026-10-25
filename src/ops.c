@@ -4,6 +4,7 @@
 #define _DARWIN_C_SOURCE
 
 #include "ops.h"
+#include "prof.h"
 
 #include <math.h>
 #include <pthread.h>
@@ -175,7 +176,12 @@ void ops_shutdown(void) {
 
 void matmul(float *output, const float *input, const float *weights, int in_size, int out_size) {
     // This is where most of the time goes. Next up: SIMD in matmul_rows.
-    if (thread_pool.thread_count == 1) { matmul_rows(output, input, weights, in_size, 0, out_size); return; }
+    PROF_START(matmul_start_ms);
+    if (thread_pool.thread_count == 1) {
+        matmul_rows(output, input, weights, in_size, 0, out_size);
+        PROF_STOP(PROF_MATMUL, matmul_start_ms);
+        return;
+    }
 
     thread_pool.job_output = output;
     thread_pool.job_input = input;
@@ -191,4 +197,5 @@ void matmul(float *output, const float *input, const float *weights, int in_size
 
     run_rows_for_thread(0);
     while (atomic_load_explicit(&thread_pool.busy_workers, memory_order_acquire) > 0) {}
+    PROF_STOP(PROF_MATMUL, matmul_start_ms);
 }

@@ -1,5 +1,6 @@
 #include "model.h"
 #include "ops.h"
+#include "prof.h"
 
 #include <fcntl.h>
 #include <math.h>
@@ -111,10 +112,12 @@ static void linear(Model *model, float *output, const float *input, const float 
     QuantizedWeights *quantized = &model->quantized;
     if (!quantized->values) { matmul(output, input, float_weights, in_size, out_size); return; }
     long weight_offset = float_weights - quantized->float_base;
+    PROF_START(matmul_start_ms);
     quantize_q8(quantized->input_values, quantized->input_scales, input, in_size);
     matmul_q8(output, quantized->input_values, quantized->input_scales,
               quantized->values + weight_offset, quantized->scales + weight_offset / Q8_GROUP,
               in_size, out_size);
+    PROF_STOP(PROF_MATMUL, matmul_start_ms);
 }
 
 void model_free(Model *model) {
@@ -172,6 +175,8 @@ float *model_forward(Model *model, int token, int position) {
         rope(state->query, embed_dim, head_size, position);
         rope(new_key, kv_dim, head_size, position);
 
+        // The attention core is timed on its own for --bench (matmuls are timed inside matmul()).
+        PROF_START(attention_start_ms);
         for (int head = 0; head < config->num_heads; head++) {
             const float *head_query = state->query + head * head_size;
             float *head_scores = state->attention_scores + (long)head * config->max_seq_len;
@@ -194,6 +199,8 @@ float *model_forward(Model *model, int token, int position) {
                 for (int i = 0; i < head_size; i++) head_output[i] += head_scores[past] * past_value[i];
             }
         }
+
+        PROF_STOP(PROF_ATTENTION, attention_start_ms);
 
         linear(model, state->layer_output, state->attention_output,
                weights->attention_out_weights + (long)layer * embed_dim * embed_dim, embed_dim, embed_dim);

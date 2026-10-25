@@ -4,11 +4,11 @@ LDLIBS  := -lm -lpthread
 # On Linux, -std=c11 hides clock_gettime. This turns it back on.
 CPPFLAGS := -D_POSIX_C_SOURCE=200809L
 
-SRC := src/main.c src/model.c src/tokenizer.c src/sampler.c src/ops.c src/compare.c
+SRC := src/main.c src/model.c src/tokenizer.c src/sampler.c src/ops.c src/compare.c src/prof.c
 BIN := tiny-infer
 
 $(BIN): $(SRC) src/*.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(SRC) $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DBUILD_FLAGS='"$(CFLAGS)"' -o $@ $(SRC) $(LDLIBS)
 
 # Fast build: native CPU features (NEON on Apple Silicon, AVX2 on x86) + OpenMP if available.
 fast: CFLAGS := -O3 -march=native -ffast-math -Wall -std=c11
@@ -21,7 +21,23 @@ debug: $(BIN)
 test: $(BIN)
 	./$(BIN) --selftest
 
-clean:
-	rm -f $(BIN)
+# Benchmark. Always rebuilds its own binary so I never time an old debug build by mistake.
+# You can override MODEL, BENCH_TOKENS or BENCH_RUNS.
+MODEL        ?= models/stories15M.bin
+BENCH_TOKENS ?= 200
+BENCH_RUNS   ?= 5
+BENCH_FLAGS  ?= -O3 -march=native -ffast-math -Wall -std=c11
 
-.PHONY: fast debug test clean
+bench: $(MODEL)
+	$(CC) $(CPPFLAGS) $(BENCH_FLAGS) -DBUILD_FLAGS='"$(BENCH_FLAGS)"' -o $(BIN)-bench $(SRC) $(LDLIBS)
+	./$(BIN)-bench --bench $(MODEL) -n $(BENCH_TOKENS) -r $(BENCH_RUNS)
+
+# Fake weights the same size as stories15M. Speed doesn't depend on the actual
+# numbers, so this does the same work without downloading anything.
+models/synthetic15M.bin: scripts/make_synthetic_model.py
+	python3 scripts/make_synthetic_model.py $@
+
+clean:
+	rm -f $(BIN) $(BIN)-bench
+
+.PHONY: fast debug test bench clean

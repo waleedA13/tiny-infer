@@ -58,23 +58,40 @@ Every push and pull request to main runs the first two on Linux and macOS: a nor
 
 ## Benchmarks
 
-I'll fill this in as I optimize. Same model, same prompt, 200 tokens.
+```bash
+make bench                                    # real weights (run ./scripts/get_model.sh first)
+make bench MODEL=models/synthetic15M.bin      # fake weights, same size, no download needed
+```
 
-| Version | tok/s | Notes |
-|---|---|---|
-| naive | | |
-| pthreads | | |
-| NEON SIMD | | |
-| int8 | | |
+`make bench` builds a separate `tiny-infer-bench` binary with `-O3 -march=native -ffast-math` (so I never accidentally time a debug build) and runs it. It generates 200 tokens starting from BOS, always picking the top token, throws away one warm-up run, and reports the middle result of 5 runs. It also shows where the time goes for each token:
+
+- **matmul**: time spent inside `matmul()`
+- **attention**: the attention part of `model_forward` (scores, softmax, mixing the values), not counting its matmuls
+- **sampling**: picking the next token
+- **rest**: everything else (embedding, rmsnorm, RoPE, SwiGLU, adding residuals)
+
+The speed doesn't care what the weights actually are, so `models/synthetic15M.bin` (make it with `make models/synthetic15M.bin`) does the same amount of work as the real model. You can change `BENCH_TOKENS`, `BENCH_RUNS` or `BENCH_FLAGS` on the make command line.
+
+Same model size, 200 tokens, default `make bench` settings.
+
+| Version | tok/s | matmul | attention | sampling | rest | Notes |
+|---|---|---|---|---|---|---|
+| skeleton | 666 | 96.5% | 0.0% | 3.4% | 0.1% | Attention and FFN aren't written yet, so this is just the embedding and the final layer. Ran on a cloud VM (Intel Xeon 2.1 GHz, one thread, GCC 13.3) with fake weights. |
+| naive | | | | | | |
+| pthreads | | | | | | |
+| NEON SIMD | | | | | | |
+| int8 | | | | | | |
 
 ## Layout
 
 ```
-src/main.c        CLI, generation loop, timing, self-tests
+src/main.c        CLI, generation loop, benchmark mode, self-tests
 src/model.c/.h    checkpoint loading and the forward pass
 src/ops.c/.h      rmsnorm, softmax, matmul (all the speed work goes here)
 src/tokenizer.c/.h
 src/sampler.c/.h
+src/prof.c/.h     timers for --bench
+scripts/make_synthetic_model.py   fake weights the same size as stories15M
 ```
 
 ## Credit
