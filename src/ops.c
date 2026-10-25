@@ -62,13 +62,13 @@ void dequantize_q8(float *float_values, const int8_t *int8_values, const float *
     for (long i = 0; i < count; i++) float_values[i] = int8_values[i] * group_scales[i / Q8_GROUP];
 }
 
-void matmul_q8(float *out, const int8_t *input_values, const float *input_scales,
-               const int8_t *weight_values, const float *weight_scales, int in_dim, int out_dim) {
+void matmul_q8(float *output, const int8_t *input_values, const float *input_scales,
+               const int8_t *weight_values, const float *weight_scales, int input_size, int output_size) {
     // Naive, same as matmul. The int32 inner loop is the part the compiler (or my
     // own NEON/AVX2 code later) can turn into wide integer multiply-adds.
-    int groups_per_row = in_dim / Q8_GROUP;
-    for (int i = 0; i < out_dim; i++) {
-        const int8_t *row_values = weight_values + (long)i * in_dim;
+    int groups_per_row = input_size / Q8_GROUP;
+    for (int i = 0; i < output_size; i++) {
+        const int8_t *row_values = weight_values + (long)i * input_size;
         const float *row_scales = weight_scales + (long)i * groups_per_row;
         float row_sum = 0.0f;
         for (int group = 0; group < groups_per_row; group++) {
@@ -78,7 +78,7 @@ void matmul_q8(float *out, const int8_t *input_values, const float *input_scales
                              (int32_t)input_values[group * Q8_GROUP + k];
             row_sum += (float)group_dot * row_scales[group] * input_scales[group];
         }
-        out[i] = row_sum;
+        output[i] = row_sum;
     }
 }
 
@@ -174,11 +174,11 @@ void ops_shutdown(void) {
     atomic_store(&thread_pool.job_counter, 0);  // new workers start counting from 0
 }
 
-void matmul(float *output, const float *input, const float *weights, int in_size, int out_size) {
+void matmul(float *output, const float *input, const float *weights, int input_size, int output_size) {
     // This is where most of the time goes. Next up: SIMD in matmul_rows.
     PROF_START(matmul_start_ms);
     if (thread_pool.thread_count == 1) {
-        matmul_rows(output, input, weights, in_size, 0, out_size);
+        matmul_rows(output, input, weights, input_size, 0, output_size);
         PROF_STOP(PROF_MATMUL, matmul_start_ms);
         return;
     }
@@ -186,8 +186,8 @@ void matmul(float *output, const float *input, const float *weights, int in_size
     thread_pool.job_output = output;
     thread_pool.job_input = input;
     thread_pool.job_weights = weights;
-    thread_pool.job_input_size = in_size;
-    thread_pool.job_output_size = out_size;
+    thread_pool.job_input_size = input_size;
+    thread_pool.job_output_size = output_size;
     atomic_store_explicit(&thread_pool.busy_workers, thread_pool.thread_count - 1, memory_order_relaxed);
     // Do this while holding the lock so a worker about to sleep can't miss it.
     pthread_mutex_lock(&thread_pool.sleep_lock);

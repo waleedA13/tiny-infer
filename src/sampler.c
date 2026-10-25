@@ -9,12 +9,13 @@ static float random_float(unsigned long long *rng_state) {
     return ((*rng_state * 0x2545F4914F6CDD1DULL) >> 40) / 16777216.0f;
 }
 
-static int argmax(const float *values, int size) {
+int argmax(const float *values, int count) {
     int best_index = 0;
-    for (int i = 1; i < size; i++) if (values[i] > values[best_index]) best_index = i;
+    for (int i = 1; i < count; i++) if (values[i] > values[best_index]) best_index = i;
     return best_index;
 }
 
+// TODO (later): top-p sampling.
 int sample(float *logits, int vocab_size, float temperature, unsigned long long *rng_state) {
     if (temperature == 0.0f) return argmax(logits, vocab_size);
     for (int i = 0; i < vocab_size; i++) logits[i] /= temperature;
@@ -25,5 +26,4 @@ int sample(float *logits, int vocab_size, float temperature, unsigned long long 
         if (target < cumulative_prob) return token_id;
     }
     return vocab_size - 1;
-    // TODO (later): top-p sampling.
 }

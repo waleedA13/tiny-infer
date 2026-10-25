@@ -4,7 +4,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define BOS_TOKEN 1
 #define FIRST_BYTE_TOKEN 3  // tokens <0x00>..<0xFF> start at this id
 
 // File format (tokenizer.bin): int max_token_length, then for each token:
@@ -38,9 +37,9 @@ void tokenizer_free(Tokenizer *tokenizer) {
     free(tokenizer->scores);
 }
 
-const char *tokenizer_decode(const Tokenizer *tokenizer, int prev_token, int token) {
+const char *tokenizer_decode(const Tokenizer *tokenizer, int previous_token, int token) {
     const char *piece = tokenizer->vocab[token];
-    if (prev_token == BOS_TOKEN && piece[0] == ' ') piece++;
+    if (previous_token == BOS_TOKEN && piece[0] == ' ') piece++;
     return piece;
 }
 
@@ -90,12 +89,12 @@ int tokenizer_encode(const Tokenizer *tokenizer, const char *text, int *tokens, 
     // One token per character. In UTF-8 a character is one lead byte plus up to
     // 3 bytes that look like 10xxxxxx.
     char character[5];
-    for (size_t text_pos = 0; text_pos < text_length;) {
+    for (size_t text_position = 0; text_position < text_length;) {
         size_t char_length = 1;
-        while (char_length < 4 && text_pos + char_length < text_length &&
-               ((unsigned char)text[text_pos + char_length] & 0xC0) == 0x80)
+        while (char_length < 4 && text_position + char_length < text_length &&
+               ((unsigned char)text[text_position + char_length] & 0xC0) == 0x80)
             char_length++;
-        memcpy(character, text + text_pos, char_length);
+        memcpy(character, text + text_position, char_length);
         character[char_length] = '\0';
         int token_id = find_token(sorted_vocab, vocab_size, character);
         if (token_id >= 0) {
@@ -104,7 +103,7 @@ int tokenizer_encode(const Tokenizer *tokenizer, const char *text, int *tokens, 
             for (size_t byte_index = 0; byte_index < char_length; byte_index++)
                 work_tokens[token_count++] = (unsigned char)character[byte_index] + FIRST_BYTE_TOKEN;
         }
-        text_pos += char_length;
+        text_position += char_length;
     }
 
     // Merge pairs. Start after BOS so it never gets merged with text.

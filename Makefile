@@ -4,13 +4,14 @@ LDLIBS  := -lm -lpthread
 # On Linux, -std=c11 hides clock_gettime. This turns it back on.
 CPPFLAGS := -D_POSIX_C_SOURCE=200809L
 
-SRC := src/main.c src/model.c src/tokenizer.c src/sampler.c src/ops.c src/compare.c src/prof.c
+SRC := src/main.c src/model.c src/tokenizer.c src/sampler.c src/ops.c src/compare.c src/prof.c \
+       src/selftest.c src/bench.c
 BIN := tiny-infer
 
 $(BIN): $(SRC) src/*.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DBUILD_FLAGS='"$(CFLAGS)"' -o $@ $(SRC) $(LDLIBS)
 
-# Fast build: native CPU features (NEON on Apple Silicon, AVX2 on x86) + OpenMP if available.
+# Fast build: native CPU features (NEON on Apple Silicon, AVX2 on x86).
 fast: CFLAGS := -O3 -march=native -ffast-math -Wall -std=c11
 fast: $(BIN)
 

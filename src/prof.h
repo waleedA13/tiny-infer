@@ -4,10 +4,10 @@
 // Per-op timers for --bench. Wrap a region in PROF_START/PROF_STOP and its time
 // is added to prof_ms[category]. Costs one branch when profiling is off.
 
-enum { PROF_MATMUL, PROF_ATTENTION, PROF_N };
+enum { PROF_MATMUL, PROF_ATTENTION, PROF_CATEGORY_COUNT };
 
 extern int prof_enabled;
-extern double prof_ms[PROF_N];
+extern double prof_ms[PROF_CATEGORY_COUNT];
 
 double prof_now_ms(void);
 void   prof_reset(void);

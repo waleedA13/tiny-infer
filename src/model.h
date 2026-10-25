@@ -52,12 +52,12 @@ typedef struct {
 // its int8 values start at X too, and its scales start at X / Q8_GROUP. This means
 // the forward pass doesn't have to care which version it's using.
 typedef struct {
-    const float *float_base;   // start of the float weights (w.token_embedding)
+    const float *float_base;   // start of the float weights (weights.token_embedding)
     long value_count;          // number of floats from float_base to the end of the weights
     int8_t *values;            // (value_count)
     float *scales;             // (value_count / Q8_GROUP)
-    int8_t *input_values;      // scratch for the int8 input of each matmul, max(dim, hidden_dim)
-    float *input_scales;       // (max(dim, hidden_dim) / Q8_GROUP)
+    int8_t *input_values;      // scratch for the int8 input of each matmul, max(embed_dim, hidden_dim)
+    float *input_scales;       // (max(embed_dim, hidden_dim) / Q8_GROUP)
 } QuantizedWeights;
 
 typedef struct {

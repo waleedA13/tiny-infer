@@ -18,9 +18,9 @@ void softmax(float *values, int size);
 int  ops_init(int requested_threads);
 void ops_shutdown(void);
 
-// output(out_size) = weights(out_size, in_size) @ input(in_size). weights is row-major.
+// output(output_size) = weights(output_size, input_size) @ input(input_size). weights is row-major.
 // The rows get split across threads. Only call it from one thread at a time.
-void matmul(float *output, const float *input, const float *weights, int in_size, int out_size);
+void matmul(float *output, const float *input, const float *weights, int input_size, int output_size);
 
 // ---- int8 quantization ----
 // Floats get turned into int8 in groups of Q8_GROUP. Each group keeps its int8
@@ -34,7 +34,7 @@ void dequantize_q8(float *float_values, const int8_t *int8_values, const float *
 
 // Same as matmul, but the weights and the input are both int8 with a scale per group.
 // Each group's dot product adds up in int32, then gets scaled back to a float.
-void matmul_q8(float *out, const int8_t *input_values, const float *input_scales,
-               const int8_t *weight_values, const float *weight_scales, int in_dim, int out_dim);
+void matmul_q8(float *output, const int8_t *input_values, const float *input_scales,
+               const int8_t *weight_values, const float *weight_scales, int input_size, int output_size);
 
 #endif

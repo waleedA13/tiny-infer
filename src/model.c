@@ -108,15 +108,15 @@ int model_quantize(Model *model) {
 // Every weight matmul in the forward pass goes through here. float_weights is the
 // float matrix from the file. If the model is quantized, we use its int8 copy instead.
 static void linear(Model *model, float *output, const float *input, const float *float_weights,
-                   int in_size, int out_size) {
+                   int input_size, int output_size) {
     QuantizedWeights *quantized = &model->quantized;
-    if (!quantized->values) { matmul(output, input, float_weights, in_size, out_size); return; }
+    if (!quantized->values) { matmul(output, input, float_weights, input_size, output_size); return; }
     long weight_offset = float_weights - quantized->float_base;
     PROF_START(matmul_start_ms);
-    quantize_q8(quantized->input_values, quantized->input_scales, input, in_size);
+    quantize_q8(quantized->input_values, quantized->input_scales, input, input_size);
     matmul_q8(output, quantized->input_values, quantized->input_scales,
               quantized->values + weight_offset, quantized->scales + weight_offset / Q8_GROUP,
-              in_size, out_size);
+              input_size, output_size);
     PROF_STOP(PROF_MATMUL, matmul_start_ms);
 }
 
@@ -146,6 +146,37 @@ static void rope(float *vector, int size, int head_size, int position) {
     }
 }
 
+// Each head compares its query with every key saved so far, turns that into
+// weights with softmax, and mixes the saved values with those weights.
+// Several query heads can share one key/value head (num_kv_heads < num_heads).
+static void attention(const Config *config, RunState *state, const float *layer_key_cache,
+                      const float *layer_value_cache, int position) {
+    int head_size = config->embed_dim / config->num_heads;
+    int kv_dim = head_size * config->num_kv_heads;
+    int heads_per_kv_head = config->num_heads / config->num_kv_heads;
+    float score_scale = 1.0f / sqrtf((float)head_size);
+    for (int head = 0; head < config->num_heads; head++) {
+        const float *head_query = state->query + head * head_size;
+        float *head_scores = state->attention_scores + (long)head * config->max_seq_len;
+        int kv_head_offset = (head / heads_per_kv_head) * head_size;
+
+        for (int past = 0; past <= position; past++) {
+            const float *past_key = layer_key_cache + (long)past * kv_dim + kv_head_offset;
+            float dot_product = 0.0f;
+            for (int i = 0; i < head_size; i++) dot_product += head_query[i] * past_key[i];
+            head_scores[past] = dot_product * score_scale;
+        }
+        softmax(head_scores, position + 1);
+
+        float *head_output = state->attention_output + head * head_size;
+        memset(head_output, 0, head_size * sizeof(float));
+        for (int past = 0; past <= position; past++) {
+            const float *past_value = layer_value_cache + (long)past * kv_dim + kv_head_offset;
+            for (int i = 0; i < head_size; i++) head_output[i] += head_scores[past] * past_value[i];
+        }
+    }
+}
+
 float *model_forward(Model *model, int token, int position) {
     Config *config = &model->config;
     Weights *weights = &model->weights;
@@ -153,14 +184,10 @@ float *model_forward(Model *model, int token, int position) {
     int embed_dim = config->embed_dim, hidden_dim = config->hidden_dim;
     int head_size = embed_dim / config->num_heads;
     int kv_dim = head_size * config->num_kv_heads;
-    int heads_per_kv_head = config->num_heads / config->num_kv_heads;
-    float score_scale = 1.0f / sqrtf((float)head_size);
 
-    // 1. Look up the token embedding.
     memcpy(state->residual, weights->token_embedding + (long)token * embed_dim, embed_dim * sizeof(float));
 
     for (int layer = 0; layer < config->num_layers; layer++) {
-        // Weight matmuls go through linear() so they pick up int8.
         // Attention. This token's key and value get saved in the cache.
         long layer_cache_offset = (long)layer * config->max_seq_len * kv_dim;
         float *layer_key_cache = state->key_cache + layer_cache_offset;
@@ -175,31 +202,9 @@ float *model_forward(Model *model, int token, int position) {
         rope(state->query, embed_dim, head_size, position);
         rope(new_key, kv_dim, head_size, position);
 
-        // The attention core is timed on its own for --bench (matmuls are timed inside matmul()).
+        // The attention core is timed on its own for --bench (the matmuls get timed separately).
         PROF_START(attention_start_ms);
-        for (int head = 0; head < config->num_heads; head++) {
-            const float *head_query = state->query + head * head_size;
-            float *head_scores = state->attention_scores + (long)head * config->max_seq_len;
-            int kv_head_offset = (head / heads_per_kv_head) * head_size;
-
-            // Compare this query with every key we've seen so far.
-            for (int past = 0; past <= position; past++) {
-                const float *past_key = layer_key_cache + (long)past * kv_dim + kv_head_offset;
-                float dot_product = 0.0f;
-                for (int i = 0; i < head_size; i++) dot_product += head_query[i] * past_key[i];
-                head_scores[past] = dot_product * score_scale;
-            }
-            softmax(head_scores, position + 1);
-
-            // Mix the saved values using those scores.
-            float *head_output = state->attention_output + head * head_size;
-            memset(head_output, 0, head_size * sizeof(float));
-            for (int past = 0; past <= position; past++) {
-                const float *past_value = layer_value_cache + (long)past * kv_dim + kv_head_offset;
-                for (int i = 0; i < head_size; i++) head_output[i] += head_scores[past] * past_value[i];
-            }
-        }
-
+        attention(config, state, layer_key_cache, layer_value_cache, position);
         PROF_STOP(PROF_ATTENTION, attention_start_ms);
 
         linear(model, state->layer_output, state->attention_output,

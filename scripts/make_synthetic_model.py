@@ -7,30 +7,30 @@ import random
 import struct
 import sys
 
-dim, hidden_dim, n_layers, n_heads, n_kv_heads, vocab_size, seq_len = 288, 768, 6, 6, 6, 32000, 256
-head_size = dim // n_heads
-kv_dim = n_kv_heads * head_size
+embed_dim, hidden_dim, num_layers, num_heads, num_kv_heads, vocab_size, max_seq_len = 288, 768, 6, 6, 6, 32000, 256
+head_size = embed_dim // num_heads
+kv_dim = num_kv_heads * head_size
 
 tensor_sizes = [
-    vocab_size * dim,                 # token_embedding (shared with the classifier)
-    n_layers * dim,                   # rms_att
-    n_layers * dim * dim,             # wq
-    n_layers * dim * kv_dim,          # wk
-    n_layers * dim * kv_dim,          # wv
-    n_layers * dim * dim,             # wo
-    n_layers * dim,                   # rms_ffn
-    n_layers * dim * hidden_dim,      # w1
-    n_layers * hidden_dim * dim,      # w2
-    n_layers * dim * hidden_dim,      # w3
-    dim,                              # rms_final
-    2 * seq_len * head_size,          # legacy freq_cis_real / freq_cis_imag
+    vocab_size * embed_dim,               # token_embedding (shared with the classifier)
+    num_layers * embed_dim,               # attention_norm
+    num_layers * embed_dim * embed_dim,   # query_weights
+    num_layers * embed_dim * kv_dim,      # key_weights
+    num_layers * embed_dim * kv_dim,      # value_weights
+    num_layers * embed_dim * embed_dim,   # attention_out_weights
+    num_layers * embed_dim,               # ffn_norm
+    num_layers * embed_dim * hidden_dim,  # ffn_gate_weights
+    num_layers * hidden_dim * embed_dim,  # ffn_down_weights
+    num_layers * embed_dim * hidden_dim,  # ffn_up_weights
+    embed_dim,                            # final_norm
+    2 * max_seq_len * head_size,          # legacy freq_cis_real / freq_cis_imag
 ]
 
 output_path = sys.argv[1] if len(sys.argv) > 1 else "models/synthetic15M.bin"
 random_generator = random.Random(0)
 with open(output_path, "wb") as output_file:
     # Positive vocab_size means the classifier shares the embedding, like stories15M.
-    output_file.write(struct.pack("7i", dim, hidden_dim, n_layers, n_heads, n_kv_heads, vocab_size, seq_len))
+    output_file.write(struct.pack("7i", embed_dim, hidden_dim, num_layers, num_heads, num_kv_heads, vocab_size, max_seq_len))
     for tensor_size in tensor_sizes:
         weights = array.array("f", (random_generator.uniform(-0.05, 0.05) for _ in range(tensor_size)))
         output_file.write(weights.tobytes())

@@ -4,7 +4,7 @@
 #include <time.h>
 
 int prof_enabled = 0;
-double prof_ms[PROF_N];
+double prof_ms[PROF_CATEGORY_COUNT];
 
 double prof_now_ms(void) {
     struct timespec now;

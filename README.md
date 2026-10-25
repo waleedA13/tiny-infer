@@ -16,7 +16,7 @@ I'm building this to understand what happens under the hood when a model generat
 - [x] BPE prompt encoding
 - [x] pthreads matmul
 - [ ] NEON / AVX2 matmul
-- [ ] int8 quantization
+- [x] int8 quantization
 - [ ] toy MoE layer with expert prefetching
 
 ## Build and run
@@ -65,7 +65,7 @@ make bench MODEL=models/synthetic15M.bin      # fake weights, same size, no down
 
 `make bench` builds a separate `tiny-infer-bench` binary with `-O3 -march=native -ffast-math` (so I never accidentally time a debug build) and runs it. It generates 200 tokens starting from BOS, always picking the top token, throws away one warm-up run, and reports the middle result of 5 runs. It also shows where the time goes for each token:
 
-- **matmul**: time spent inside `matmul()`
+- **matmul**: time spent in the weight matmuls, fp32 or int8
 - **attention**: the attention part of `model_forward` (scores, softmax, mixing the values), not counting its matmuls
 - **sampling**: picking the next token
 - **rest**: everything else (embedding, rmsnorm, RoPE, SwiGLU, adding residuals)
@@ -85,12 +85,15 @@ Same model size, 200 tokens, default `make bench` settings.
 ## Layout
 
 ```
-src/main.c        CLI, generation loop, benchmark mode, self-tests
+src/main.c        CLI and the generation loop
 src/model.c/.h    checkpoint loading and the forward pass
 src/ops.c/.h      rmsnorm, softmax, matmul (all the speed work goes here)
 src/tokenizer.c/.h
 src/sampler.c/.h
+src/compare.c/.h  --compare, fp32 vs int8 side by side
+src/bench.c/.h    --bench
 src/prof.c/.h     timers for --bench
+src/selftest.c/.h --selftest, checks for the math kernels
 scripts/make_synthetic_model.py   fake weights the same size as stories15M
 ```
 
